@@ -48,6 +48,16 @@
                 android:textColor="#FFFFFF"
                 android:textSize="16sp" />
 
+            <TextView
+                android:id="@+id/riskScoreText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Experimental risk score: --"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
         </LinearLayout>
     </ScrollView>
 

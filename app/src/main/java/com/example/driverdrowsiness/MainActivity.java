@@ -51,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView statusText;
     private TextView earText;
     private TextView headPoseText;
+    private TextView riskScoreText;
     private Button acknowledgeButton;
 
     private ExecutorService cameraExecutor;
@@ -68,8 +69,9 @@ public class MainActivity extends AppCompatActivity {
     private final HeadPoseDetector headPoseDetector =
             new HeadPoseDetector();
 
-    // Yawn detection is currently display-only.
+    // Yawn detection and risk scoring are display-only.
     private final YawnDetector yawnDetector = new YawnDetector();
+    private final DrowsinessRiskScorer riskScorer = new DrowsinessRiskScorer();
 
     private final AtomicLong lastFrameTime = new AtomicLong(0);
 
@@ -116,6 +118,7 @@ public class MainActivity extends AppCompatActivity {
         statusText = findViewById(R.id.statusText);
         earText = findViewById(R.id.earText);
         headPoseText = findViewById(R.id.headPoseText);
+        riskScoreText = findViewById(R.id.riskScoreText);
         acknowledgeButton = findViewById(R.id.acknowledgeButton);
 
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
@@ -197,6 +200,7 @@ public class MainActivity extends AppCompatActivity {
                     statusText.setText("No face detected");
                     earText.setText("EAR: --\nMAR: --");
                     headPoseText.setText("Head pose: --");
+                    riskScoreText.setText("Experimental risk score: --");
                     acknowledgeButton.setEnabled(false);
                 }
             });
@@ -234,7 +238,7 @@ public class MainActivity extends AppCompatActivity {
         long closureDuration =
                 drowsinessDetector.getClosureDurationMs(now);
 
-        // New yawn detection. This does not trigger the alarm.
+        // Yawn detection. A confirmed possible yawn now shares the existing alarm.
         YawnDetector.Result yawnResult = yawnDetector.update(
                 landmarks,
                 inputImage.getWidth(),
@@ -246,11 +250,29 @@ public class MainActivity extends AppCompatActivity {
         HeadPoseDetector.Result landmarkPose =
                 headPoseDetector.update(landmarks, now);
 
+        // Experimental score combines signals for display only.
+        // It is deliberately not connected to the existing alarm logic.
+        DrowsinessRiskScorer.Result riskResult = riskScorer.calculate(
+                closureDuration,
+                yawnResult.possibleYawn,
+                landmarkPose.headDown
+        );
+
+        String riskMessage = String.format(
+                Locale.US,
+                "Experimental risk score: %d/100\nRisk level: %s",
+                riskResult.score,
+                riskResult.riskLevel.name()
+        );
+
         boolean eyeWarning =
                 eyeState == DrowsinessDetector.State.DROWSINESS_WARNING;
+        boolean yawnWarning = yawnResult.possibleYawn;
+        boolean activeWarning = eyeWarning || yawnWarning;
 
-        // Only prolonged eye closure can trigger the alarm.
-        if (eyeWarning) {
+        // Eye closure and a detected yawn share the existing alarm.
+        // Acknowledgement silences the alarm until both warning conditions clear.
+        if (activeWarning) {
             if (!warningAcknowledged) {
                 startAlarm();
             }
@@ -263,6 +285,8 @@ public class MainActivity extends AppCompatActivity {
 
         if (eyeWarning) {
             stateMessage = "WARNING: PROLONGED EYE CLOSURE";
+        } else if (yawnWarning) {
+            stateMessage = "WARNING: YAWN DETECTED";
         } else if (eyeState == DrowsinessDetector.State.EYES_CLOSED) {
             stateMessage = "Eyes closed - monitoring";
         } else {
@@ -327,13 +351,14 @@ public class MainActivity extends AppCompatActivity {
                     );
         }
 
-        boolean showAcknowledge = eyeWarning && !warningAcknowledged;
+        boolean showAcknowledge = activeWarning && !warningAcknowledged;
 
         runOnUiThread(() -> {
             if (!isFinishing()) {
                 statusText.setText(stateMessage);
                 earText.setText(earMessage);
                 headPoseText.setText(matrixPoseMessage);
+                riskScoreText.setText(riskMessage);
                 acknowledgeButton.setEnabled(showAcknowledge);
             }
         });
