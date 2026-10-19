@@ -68,6 +68,9 @@ public class MainActivity extends AppCompatActivity {
     private final HeadPoseDetector headPoseDetector =
             new HeadPoseDetector();
 
+    // Yawn detection is currently display-only.
+    private final YawnDetector yawnDetector = new YawnDetector();
+
     private final AtomicLong lastFrameTime = new AtomicLong(0);
 
     private volatile boolean isClosed = false;
@@ -182,6 +185,7 @@ public class MainActivity extends AppCompatActivity {
         if (faces.isEmpty()) {
             drowsinessDetector.reset();
             headPoseDetector.reset();
+            yawnDetector.reset();
             leftEarSmoother.reset();
             rightEarSmoother.reset();
 
@@ -191,7 +195,7 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 if (!isFinishing()) {
                     statusText.setText("No face detected");
-                    earText.setText("EAR: --");
+                    earText.setText("EAR: --\nMAR: --");
                     headPoseText.setText("Head pose: --");
                     acknowledgeButton.setEnabled(false);
                 }
@@ -202,36 +206,50 @@ public class MainActivity extends AppCompatActivity {
         List<NormalizedLandmark> landmarks = faces.get(0);
         long now = SystemClock.uptimeMillis();
 
+        // Calculate eye aspect ratios.
         double leftEar = leftEarSmoother.add(
                 calculateEar(
-                        landmarks, LEFT_EYE,
-                        inputImage.getWidth(), inputImage.getHeight()
+                        landmarks,
+                        LEFT_EYE,
+                        inputImage.getWidth(),
+                        inputImage.getHeight()
                 )
         );
 
         double rightEar = rightEarSmoother.add(
                 calculateEar(
-                        landmarks, RIGHT_EYE,
-                        inputImage.getWidth(), inputImage.getHeight()
+                        landmarks,
+                        RIGHT_EYE,
+                        inputImage.getWidth(),
+                        inputImage.getHeight()
                 )
         );
 
         double averageEar = (leftEar + rightEar) / 2.0;
 
+        // Existing eye-closure detection.
         DrowsinessDetector.State eyeState =
                 drowsinessDetector.update(averageEar, now);
 
         long closureDuration =
                 drowsinessDetector.getClosureDurationMs(now);
 
-        // Existing landmark-based estimate retained for comparison.
+        // New yawn detection. This does not trigger the alarm.
+        YawnDetector.Result yawnResult = yawnDetector.update(
+                landmarks,
+                inputImage.getWidth(),
+                inputImage.getHeight(),
+                now
+        );
+
+        // Existing landmark-based head-pose estimate.
         HeadPoseDetector.Result landmarkPose =
                 headPoseDetector.update(landmarks, now);
 
         boolean eyeWarning =
                 eyeState == DrowsinessDetector.State.DROWSINESS_WARNING;
 
-        // Only the existing eye-closure detector can trigger the alarm.
+        // Only prolonged eye closure can trigger the alarm.
         if (eyeWarning) {
             if (!warningAcknowledged) {
                 startAlarm();
@@ -251,16 +269,24 @@ public class MainActivity extends AppCompatActivity {
             stateMessage = "NORMAL";
         }
 
+        // Display EAR and the preliminary yawn-detection measurements.
         String earMessage = String.format(
                 Locale.US,
                 "Left EAR: %.3f\nRight EAR: %.3f\n"
-                        + "Average EAR: %.3f\nEye closure: %.1f s",
+                        + "Average EAR: %.3f\nEye closure: %.1f s\n\n"
+                        + "Mouth Aspect Ratio (MAR): %.3f\n"
+                        + "Mouth: %s\n"
+                        + "Yawn status: %s",
                 leftEar,
                 rightEar,
                 averageEar,
-                closureDuration / 1000.0
+                closureDuration / 1000.0,
+                yawnResult.mar,
+                yawnResult.mouthOpen ? "OPEN" : "CLOSED",
+                yawnResult.possibleYawn ? "POSSIBLE YAWN" : "NONE"
         );
 
+        // Existing provisional matrix-derived head-pose display.
         Optional<List<float[]>> matricesOptional =
                 result.facialTransformationMatrixes();
 
@@ -295,7 +321,8 @@ public class MainActivity extends AppCompatActivity {
                     "Transformation matrix unavailable\n"
                             + "Landmark roll: "
                             + String.format(
-                            Locale.US, "%.1f°",
+                            Locale.US,
+                            "%.1f°",
                             landmarkPose.rollDegrees
                     );
         }
@@ -315,7 +342,7 @@ public class MainActivity extends AppCompatActivity {
     /*
      * Matrix is a flattened 4x4 column-major array.
      * These Euler angles are provisional and must be validated
-     * against real head movements before using them for warnings.
+     * against real head movements before being used for warnings.
      */
     private PoseAngles extractPoseAngles(float[] m) {
         double r00 = m[0];
@@ -487,7 +514,9 @@ public class MainActivity extends AppCompatActivity {
                 statusText.setText("Camera running | Looking for face");
 
             } catch (Exception e) {
-                statusText.setText("Camera setup failed: " + e.getMessage());
+                statusText.setText(
+                        "Camera setup failed: " + e.getMessage()
+                );
             }
         }, ContextCompat.getMainExecutor(this));
     }
