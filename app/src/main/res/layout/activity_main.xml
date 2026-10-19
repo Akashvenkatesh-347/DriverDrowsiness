@@ -22,10 +22,44 @@
             android:padding="16dp">
 
             <TextView
+                android:id="@+id/monitoringServiceStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Monitoring service: Not started"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/startMonitoringButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Start Monitoring" />
+
+                <Button
+                    android:id="@+id/stopMonitoringButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:enabled="false"
+                    android:text="Stop Monitoring" />
+
+            </LinearLayout>
+
+            <TextView
                 android:id="@+id/statusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Starting camera..."
+                android:layout_marginTop="12dp"
+                android:text="Press Start Monitoring to begin."
                 android:textColor="#FFFFFF"
                 android:textSize="18sp"
                 android:textStyle="bold" />

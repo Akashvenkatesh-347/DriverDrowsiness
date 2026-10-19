@@ -1,9 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- Required for foreground services on modern Android versions -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- Required for a camera foreground service on Android 14+ -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+
+    <!-- Used to display the persistent monitoring notification -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -14,16 +24,25 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.DriverDrowsiness">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Camera monitoring service; implementation comes in a later step -->
+        <service
+            android:name=".DrowsinessMonitoringService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="camera" />
+
     </application>
 
 </manifest>
