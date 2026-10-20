@@ -1,169 +1,146 @@
-# Driver Drowsiness Detection
+# Driver Drowsiness Detection System
 
-An Android prototype that uses the front-facing camera and MediaPipe Face Landmarker to detect visual signs associated with driver drowsiness and provide an audible/vibration alert.
+## 1. Overview
 
-> **Project status:** Prototype under active development. Background camera monitoring, especially with the screen off, must be implemented and validated on supported Android versions and devices before this project is described as ready for real-world cab-driver use. This is not a certified driver-safety system and must not be relied on as the sole protection against drowsy driving.
+Driver Drowsiness Detection is an Android application prototype that analyzes facial landmarks using the device's front-facing camera to identify visual indicators associated with drowsiness. It monitors eye closure, mouth opening, and head pose, then presents detection status and can trigger an audible and vibration warning.
 
-## Features
+The application uses a foreground service to support continued monitoring when its Activity is not visible.
 
-- **Eye-closure detection:** Estimates Eye Aspect Ratio (EAR) from facial landmarks and triggers the existing alert after sustained eye closure.
-- **Yawn detection:** Estimates Mouth Aspect Ratio (MAR) and detects a sustained mouth opening.
-- **Audible and vibration alert:** Reuses the app's alarm behavior for confirmed eye-closure and yawn warnings, with an acknowledgement control.
-- **Head-pose indicator:** Displays a landmark-based head-down estimate. Treat this as a prototype signal, not a validated head-pose measurement.
-- **Experimental risk score:** Combines eye-closure duration, the yawn signal, and the head-down signal into a heuristic score from 0 to 100. It is not a probability or a medically validated fatigue score.
-- **On-device vision processing:** Uses MediaPipe Face Landmarker with a local `.task` model asset.
+**Project type:** Android application / computer vision prototype  
+**Primary language:** Java  
+**Platform:** Android  
+**Computer vision:** MediaPipe Face Landmarker
 
-## Technology stack
+## 2. Problem Statement
 
-- Java
-- Android SDK and Android Studio
-- XML layouts
-- CameraX
-- MediaPipe Tasks Vision (`com.google.mediapipe:tasks-vision:0.10.35`)
-- Gradle
-- JUnit tests for the risk-scoring logic
+Driver fatigue can reduce attention and reaction time. This project explores how a smartphone camera and on-device facial landmark detection can be used to identify potential visual signs of drowsiness and provide an alert.
 
-The current project package is `com.example.driverdrowsiness`.
+The application is an educational prototype. It is not a certified driver-monitoring or accident-prevention system.
 
-## How detection works
+## 3. Objectives
 
-### Eye closure
+- Detect facial landmarks from the front-facing camera.
+- Estimate eye closure using the Eye Aspect Ratio (EAR).
+- Identify sustained mouth opening as a possible yawn.
+- Estimate head orientation using a geometric heuristic.
+- Display detection status and an experimental risk score.
+- Provide audible and vibration warnings.
+- Support user-controlled start, stop, and warning acknowledgment.
+- Maintain monitoring through a foreground service when the Activity is not visible.
 
-The app calculates an Eye Aspect Ratio (EAR) from selected MediaPipe face landmarks and uses a smoothing step to reduce brief fluctuations. Sustained closure is evaluated by the drowsiness detector. The current prototype uses a 1,500 ms warning duration.
+## 4. Technology Stack
 
-### Yawning
+| Technology | Purpose |
+|---|---|
+| Java | Application and detection logic |
+| Android SDK | Mobile application platform |
+| XML | User interface layout |
+| CameraX | Camera preview and frame analysis |
+| MediaPipe Tasks Vision | Facial landmark detection |
+| Android LifecycleService | Ongoing monitoring service |
+| Android notification APIs | Persistent monitoring notification |
+| Android Ringtone and Vibrator APIs | Warning feedback |
+| Gradle | Build and dependency management |
 
-The app calculates a Mouth Aspect Ratio (MAR) using upper/lower lip and mouth-corner landmarks. The current prototype considers a yawn when MAR is at least `0.60` for at least `800 ms`. These are experimental thresholds and may need calibration across people, camera positions, and lighting.
+## 5. System Architecture
 
-### Risk score
+The application is divided into three logical layers.
 
-The experimental scorer assigns points for eye-closure duration, a possible yawn, and a sustained head-down signal. Its output is a rule-based score, not a probability. It is intended for prototype evaluation and should not be used to make safety-critical decisions.
+### Presentation layer
+`MainActivity` manages the interface, monitoring controls, camera preview attachment, detection status, EAR values, head-pose information, and risk-score display.
 
-## Requirements
+### Monitoring and vision layer
+`DrowsinessMonitoringService` manages the camera pipeline and MediaPipe Face Landmarker. CameraX supplies frames for analysis, which are converted into images for inference. The service publishes detection updates to the Activity when it is bound.
 
-- Android Studio with a compatible Android SDK and Gradle setup for this project
-- An Android phone with a working front-facing camera
-- Camera permission granted
-- The MediaPipe model file at:
+### Detection and alert layer
+Separate Java classes process the measurements:
 
-  `app/src/main/assets/face_landmarker.task`
+- `EarSmoother`: smooths eye measurements using a small sample window.
+- `DrowsinessDetector`: evaluates sustained eye closure.
+- `YawnDetector`: evaluates sustained mouth opening.
+- `HeadPoseDetector`: estimates head orientation using a geometric heuristic.
+- `DrowsinessRiskScorer`: produces an experimental, display-oriented risk score.
 
-## Run from Android Studio
+The service also manages the warning sound, vibration, and acknowledgment behavior.
 
-1. Clone the repository:
+## 6. Detection Workflow
 
-   ```bash
-   git clone https://github.com/Akashvenkatesh-347/DriverDrowsiness.git
-   ```
+1. The user grants camera permission and starts monitoring.
+2. The monitoring service starts and displays its foreground notification.
+3. CameraX opens the front-facing camera and provides frames.
+4. Image analysis throttles incoming frames before processing.
+5. MediaPipe Face Landmarker estimates facial landmarks.
+6. Eye, mouth, and head-pose measurements are calculated.
+7. Detection components evaluate the measurements over time.
+8. The application updates its status and experimental risk score.
+9. When the eye-closure warning condition is met, the application can activate an audible and vibration alert.
+10. The user can acknowledge a warning or stop monitoring.
 
-2. Open the project directory in Android Studio.
-3. Allow Gradle sync to finish.
-4. Connect an Android phone or start a compatible emulator. A physical device with a front camera is recommended for meaningful vision testing.
-5. Grant camera permission when prompted.
-6. Run the `app` configuration and verify camera preview, EAR/MAR readings, warnings, acknowledgement, and the experimental score.
+## 7. Current Detection Configuration
 
-If the model asset is missing, add the correct `face_landmarker.task` file to `app/src/main/assets/` before running the app.
+| Component | Current configuration |
+|---|---|
+| Face detection | MediaPipe Face Landmarker, configured for one face |
+| Eye closure | EAR threshold: 0.18 |
+| Sustained eye closure | 1,500 ms |
+| EAR smoothing | Five-sample median smoother |
+| Yawn detection | Mouth-opening heuristic with a sustained-duration condition |
+| Head-pose detection | Geometric heuristic with a sustained-duration condition |
+| Frame analysis | Throttled to approximately 10 frames per second |
+| Risk score | Experimental heuristic score, capped at 100 |
 
-## Build an APK
+These values are implementation settings, not validated universal thresholds. Their suitability must be evaluated under controlled conditions and across different users, lighting, camera angles, and devices.
 
-### Debug APK for testing
+## 8. Reliability and Testing
 
-In Android Studio:
+Initial manual testing on a physical Android device demonstrated that:
 
-1. Select **Build → Build Bundle(s) / APK(s) → Build APK(s)** (menu wording may vary by Android Studio version).
-2. Wait for the build to complete.
-3. Click **Locate** in the build notification.
+- The application builds and launches successfully.
+- Camera preview and detection operate while monitoring is active.
+- Monitoring continued when the application was minimized and the screen was locked during the tested session.
+- A 15-minute monitoring session completed without an observed interruption.
+- Battery usage did not appear to be a major concern during the user's initial assessment.
 
-The debug APK is normally created at:
+These observations are preliminary, not a comprehensive validation.
 
-`app/build/outputs/apk/debug/app-debug.apk`
+Recommended additional tests include:
 
-Or run from the project root in PowerShell:
+- Normal face with eyes open and mouth closed.
+- Brief and sustained eye closure.
+- Ordinary talking compared with a simulated yawn.
+- Head movement and changes in camera angle.
+- Poor lighting, glasses, and partial facial occlusion.
+- Camera permission denial and camera unavailability.
+- Warning acknowledgment and alarm recovery.
+- Repeated start/stop cycles and longer screen-off sessions.
+- CPU usage, memory usage, detection latency, and battery consumption.
 
-```powershell
-.\gradlew.bat assembleDebug
-```
+Record false positives and missed detections rather than relying only on successful demonstrations.
 
-Then check:
+## 9. Limitations
 
-`app\build\outputs\apk\debug\app-debug.apk`
+- EAR thresholds can vary with facial characteristics, camera placement, and lighting.
+- Mouth opening does not uniquely indicate yawning.
+- The head-pose implementation is heuristic and may not reliably classify every head movement.
+- The risk score is experimental and has not been validated against a recognized fatigue assessment standard.
+- Camera access, background execution, and service behavior can vary by Android version and device manufacturer.
+- The prototype has not been established as suitable for real-world driving or safety-critical use.
 
-A debug APK is useful for testing; do not treat it as a production release.
+**Safety note:** Test the application only while stationary, with the vehicle safely parked. Never interact with or rely on the prototype while driving. Anyone feeling sleepy should stop in a safe location and rest.
 
-### Signed release APK
+## 10. Future Improvements
 
-1. In Android Studio, select **Build → Generate Signed Bundle / APK**.
-2. Choose **APK**, then select **Next**.
-3. Choose the `app` module.
-4. Create a new keystore or select an existing one.
-5. Store the keystore and passwords securely. Do not commit them to Git.
-6. Select the `release` build variant and complete the wizard.
-7. Find the generated APK in the `app/build/outputs/` directory (the exact subfolder depends on the selected variant and configuration).
-8. Install it on a test device and validate it before sharing.
+- Evaluate detection accuracy with a structured test dataset.
+- Measure false-positive and false-negative rates.
+- Improve robustness to lighting, occlusion, and camera positioning.
+- Add structured logging and diagnostic information.
+- Profile CPU, memory, inference latency, and energy consumption.
+- Improve error handling and monitoring-state reporting.
+- Add automated tests for the detection algorithms.
+- Prepare a reproducible test report before making accuracy claims.
 
-Keep the same signing key for future updates. Losing the signing key can prevent users from installing updates over an existing installation.
+## 11. Conclusion
 
-## Background monitoring status
+This project demonstrates an Android-based computer vision pipeline that uses facial landmarks to estimate visual indicators associated with drowsiness. Its modular detection components, camera-analysis pipeline, and foreground monitoring service provide a foundation for further experimentation, testing, and improvement.
 
-The current project baseline described in this README uses CameraX from the app's activity. **Do not assume camera monitoring continues when the app is minimized or the screen is off.** That behavior requires a deliberate Android lifecycle/foreground-service design, appropriate manifest declarations and permissions for the app's target SDK, visible user consent, and testing on real devices.
-
-Planned background-monitoring work:
-
-- Add a clear **Start monitoring / Stop monitoring** flow.
-- Start camera monitoring while the activity is visible, after camera permission is granted.
-- Investigate a camera foreground service for minimized operation, with a persistent notification and clear monitoring status.
-- Handle service startup failures, camera contention, permission revocation, and service termination visibly.
-- Test screen-off behavior separately; Android version, target SDK, device policy, and manufacturer battery restrictions can affect it.
-- Never show “monitoring” as active if camera frames are not actually being processed.
-
-## Reliability testing checklist
-
-- [ ] Normal face, eyes open, mouth closed: no alert.
-- [ ] Brief eye closure: no prolonged-closure alert.
-- [ ] Sustained eye closure: existing alarm activates.
-- [ ] Ordinary talking: no repeated yawn alert.
-- [ ] Sustained simulated yawn: yawn warning and alarm activate.
-- [ ] Acknowledge silences the alarm as designed.
-- [ ] Face leaves the frame: UI reports unavailable/no face rather than implying monitoring is effective.
-- [ ] Test in different lighting and camera angles.
-- [ ] Minimize the app and verify whether frame processing continues.
-- [ ] Test screen-off behavior separately on each target device.
-- [ ] Verify monitoring status when permission is denied or the camera becomes unavailable.
-
-Record false positives and missed detections. A small number of successful demonstrations is not enough to establish real-world accuracy.
-
-## Repository layout
-
-```text
-DriverDrowsiness/
-├── app/
-│   ├── src/main/
-│   │   ├── assets/
-│   │   │   └── face_landmarker.task
-│   │   ├── java/com/example/driverdrowsiness/
-│   │   │   ├── MainActivity.java
-│   │   │   ├── DrowsinessDetector.java
-│   │   │   ├── DrowsinessRiskScorer.java
-│   │   │   ├── EarSmoother.java
-│   │   │   ├── HeadPoseDetector.java
-│   │   │   └── YawnDetector.java
-│   │   └── res/layout/activity_main.xml
-│   └── src/test/java/com/example/driverdrowsiness/
-│       └── DrowsinessRiskScorerTest.java
-└── README.md
-```
-
-This tree reflects the known project files; minor differences may exist in the current checkout.
-
-## Limitations and safety
-
-- This is an educational prototype, not a certified driver-monitoring system.
-- Detection performance can vary with lighting, glasses, camera placement, facial differences, motion, and occlusion.
-- The heuristic risk score is not a medical diagnosis or validated measure of fatigue.
-- Background and screen-off camera behavior is not considered supported until explicitly implemented and tested.
-- Do not test or interact with the app while driving. Test while stationary and with the vehicle safely parked.
-- Drivers should stop in a safe location and rest if they feel sleepy; this app cannot guarantee prevention of an accident.
-
-## License
-
-No license has been specified yet. Add a `LICENSE` file before presenting this repository as open source.
+The current implementation should be considered a working educational prototype rather than a validated driver-safety solution.
